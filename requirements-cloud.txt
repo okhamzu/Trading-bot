@@ -1,0 +1,8 @@
+# General cloud development tools; bot-specific dependencies come later.
+pandas>=2.2,<3
+numpy>=1.26,<3
+matplotlib>=3.8,<4
+requests>=2.32,<3
+python-dotenv>=1,<2
+pytest>=8,<10
+ipykernel>=6,<8
