@@ -1,0 +1,100 @@
+mode:
+  dry_run: true
+  alerts_enabled: true
+
+symbols:
+  - name: XAUUSD
+    enabled: true
+    max_spread_points: 40
+    sweep_buffer_points: 20
+    stop_buffer_points: 30
+  - name: EURUSD
+    enabled: true
+    max_spread_points: 15
+    sweep_buffer_points: 2
+    stop_buffer_points: 5
+  - {name: GBPUSD, enabled: false, max_spread_points: 18, sweep_buffer_points: 3, stop_buffer_points: 6}
+  - {name: USDJPY, enabled: false, max_spread_points: 18, sweep_buffer_points: 3, stop_buffer_points: 6}
+  - {name: AUDUSD, enabled: false, max_spread_points: 18, sweep_buffer_points: 3, stop_buffer_points: 6}
+  - {name: USDCAD, enabled: false, max_spread_points: 18, sweep_buffer_points: 3, stop_buffer_points: 6}
+  - {name: USDCHF, enabled: false, max_spread_points: 18, sweep_buffer_points: 3, stop_buffer_points: 6}
+  - {name: NZDUSD, enabled: false, max_spread_points: 18, sweep_buffer_points: 3, stop_buffer_points: 6}
+
+timeframes:
+  bias: H4
+  intermediate: H1
+  execution: M15
+  refinement: M5
+
+history_bars: {H4: 600, H1: 1000, M15: 1500, M5: 2000, D1: 500}
+swings:
+  lookback: {H4: 3, H1: 3, M15: 3, M5: 2, D1: 3}
+structure:
+  break_confirmation: close
+displacement:
+  atr_period: 14
+  min_body_atr: 1.2
+  min_body_to_range: 0.6
+fvg:
+  min_size_atr: 0.1
+  entry_level: edge
+liquidity:
+  equal_level_tolerance_atr: 0.1
+  min_touches: 2
+order_blocks:
+  zone: full_range
+
+sessions:
+  asia: ["20:00", "00:00"]
+  london_kz: ["02:00", "05:00"]
+  ny_am_kz: ["07:00", "10:00"]
+  silver_bullet: ["10:00", "11:00"]
+  trade_sessions: [london_kz, ny_am_kz]
+
+strategy:
+  active_models: [sweep_mss_fvg]
+  bias_method: htf_structure
+  neutral_bias_trades: false
+  min_rr: 2.0
+  setup_expiry_bars: 12
+  max_sweep_to_mss_bars: 10
+
+risk:
+  risk_per_trade_pct: 0.75
+  max_daily_loss_pct: 2.0
+  max_drawdown_pct: 6.0
+  max_consecutive_losses: 3
+  max_setups_per_day: 3
+  one_active_setup_per_symbol: true
+  result_source: both_real_preferred
+
+alerts:
+  provider: twilio
+  send_watch_alerts: true
+  attach_chart: true
+  display_timezone: Asia/Karachi
+
+ai:
+  enabled: true
+  model: claude-sonnet-5
+  max_tokens: 300
+  timeout_seconds: 20
+  max_calls_per_day: 50
+
+news_blackout:
+  window_minutes: 30
+  events: []
+
+backtest:
+  start: "2025-01-01"
+  end: "2026-09-01"
+  in_sample_pct: 70
+  spread_points: {XAUUSD: 30, EURUSD: 10}
+  slippage_points: {XAUUSD: 10, EURUSD: 1}
+  commission_per_lot: 0
+  same_bar_tp_sl: sl_first
+  starting_balance: 10000
+
+mt5:
+  broker_utc_offset_hours: 0
+  reconnect_attempts: 5

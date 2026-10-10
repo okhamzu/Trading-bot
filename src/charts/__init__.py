@@ -1,0 +1,1 @@
+"""Annotated chart output."""

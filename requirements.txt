@@ -1,0 +1,14 @@
+MetaTrader5>=5.0.45; platform_system == "Windows"
+pandas>=2.2
+numpy>=2.0
+PyYAML>=6.0
+python-dotenv>=1.0
+mplfinance>=0.12.10b0
+matplotlib>=3.9
+anthropic>=0.40
+requests>=2.32
+twilio>=9.0
+pyarrow>=17.0
+pytest>=8.0
+tabulate>=0.9
+tzdata>=2024.1

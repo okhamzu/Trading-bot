@@ -1,27 +1,61 @@
-# Browser development workspace
+# ICT/SMC Trading Alert Bot
 
-This repository currently contains cloud setup files only; the trading bot has not been imported.
+An alerts-only Python 3.11+ scanner and no-lookahead backtester for XAUUSD and major FX pairs. It connects to a logged-in MetaTrader 5 terminal, evaluates only closed candles, finds ICT/SMC setups, sizes them at configured risk, and sends the owner a manual-trade alert. **It cannot place orders.**
 
-## Start
+## Safety guarantees
 
-Open https://codespaces.new/okhamzu/Trading-bot and create a Codespace on main. Check the displayed usage/billing information first. Wait for the setup command to finish. Open Terminal > New Terminal and run:
+- `mode.dry_run` must be `true`; startup fails otherwise.
+- There is no live execution module and no MT5 order-placement call.
+- The latest forming MT5 candle is discarded.
+- Historical higher-timeframe data is exposed only after the candle closes.
+- Credentials and generated trading data are gitignored.
+
+## Install
+
+Live MT5 access requires Windows, MetaTrader 5 installed and logged in, and Python 3.11+.
 
 ```bash
-claude
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
 ```
 
-Complete Claude's sign-in in your browser using an eligible Claude account. A ChatGPT subscription does not include Claude access.
+Fill `.env` locally. Never commit it. Review `config/settings.yaml`; broker symbol names may use suffixes such as `XAUUSDm`.
 
-Python 3.11, a project virtual environment, Node.js, pandas, NumPy, matplotlib, requests, python-dotenv, pytest and Jupyter kernel support are configured. Claude Code is installed using Anthropic's official native installer. Setup checks imports and the Claude version. If setup fails, review the creation log and rerun `bash .devcontainer/setup.sh`.
+## First run
 
-## Bring in your project
+In MT5, set **Tools → Options → Charts → Max bars in chart** to Unlimited and load the required history.
 
-Before importing private bot code, make sure the repository visibility is appropriate. Never commit passwords, API keys or broker credentials. The ignore file is a precaution, not a secret scanner. Add your actual bot dependencies after reviewing compatibility; requirements-cloud.txt is only a starter toolset.
+```bash
+python scripts/export_candles.py --symbol XAUUSD --tf M15 --bars 500
+python scripts/download_history.py --start 2025-01-01 --symbols XAUUSD EURUSD
+python scripts/run_backtest.py --model sweep_mss_fvg --bias htf_structure --symbol XAUUSD
+python scripts/run_backtest.py --grid all
+python scripts/run_live.py --once
+python scripts/run_live.py
+```
 
-Use this Linux workspace for editing, analysis and CSV-based backtesting. MetaTrader 5 terminal connectivity is not configured here. Run the MT5-dependent portion on a separate Windows computer or Windows VPS. No trading, WhatsApp integration, VPS or broker connection is activated by this setup.
+`export_candles.py` writes `time_utc, time_pkt, open, high, low, close, volume` to `output/exports/` for manual analysis. Backtests read the cached Parquet files and therefore run without MT5, including on macOS/Linux.
 
-Stop the Codespace when finished via https://github.com/codespaces. Cloud compute and storage may incur charges depending on your account allowance.
+## Architecture
 
-Official documentation:
-- https://code.claude.com/docs/en/setup
-- https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/adding-a-dev-container-configuration/setting-up-your-python-project-for-codespaces
+- `src/analysis/`: deterministic ATR, swings, structure, liquidity, FVG, OB, ranges, displacement and sessions.
+- `src/strategy/`: bias methods, reusable filters and entry models.
+- `src/backtest/`: event-driven execution, conservative fills, metrics and reports.
+- `src/alerts/`, `src/charts/`, `src/ai/`: WhatsApp formatting/delivery, annotated charts and optional Claude commentary.
+- `src/state/`, `src/journal/`, `src/tracking/`: restart-safe dedupe and setup outcome tracking.
+
+The live path and backtester call the same `build_context()` and `scan_context()` functions.
+
+## WhatsApp
+
+`dry_run: true` logs alerts instead of sending them. Provider adapters exist for Twilio, CallMeBot and Meta Cloud. Twilio accepts text immediately, but a local chart needs a public media URL; the adapter safely falls back to text rather than exposing files. Meta Cloud can be extended to upload the generated chart directly.
+
+## Backtest outputs
+
+Each run writes `summary.csv`, `trades.csv`, and `report.md` under a timestamped folder in `output/backtests/`. The grid always supports the `none` bias baseline and marks results with fewer than 50 trades as weak.
+
+## Disclaimer
+
+This software is a research and alerting tool, not financial advice. Validate every model with out-of-sample testing and demo forward testing before risking real money.
