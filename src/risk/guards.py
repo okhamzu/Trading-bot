@@ -24,6 +24,7 @@ class RiskGuards:
         self.consecutive_losses = self.consecutive_losses + 1 if pnl < 0 else 0
 
     def allowed(self, day: date, equity: float) -> tuple[bool, str]:
+        self.peak_equity = max(self.peak_equity, equity)
         if self.manually_halted:
             return False, "Manual/max-drawdown halt requires reset"
         if -self.daily_pnl.get(day, 0.0) >= self.starting_balance * self.max_daily_loss_pct / 100:

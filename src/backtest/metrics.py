@@ -8,10 +8,13 @@ import pandas as pd
 def calculate_metrics(trades: pd.DataFrame, starting_balance: float = 10000.0, risk_pct: float = 0.75) -> dict:
     if trades.empty:
         return {"trades": 0, "win_rate": 0.0, "average_r": 0.0, "expectancy": 0.0, "total_r": 0.0, "profit_factor": 0.0, "max_drawdown_r": 0.0, "max_drawdown_pct": 0.0, "longest_losing_streak": 0}
+    trades = trades.loc[trades["status"].isin(["sl", "tp1", "tp2", "tp3"])] if "status" in trades else trades
     results = pd.to_numeric(trades["result_r"], errors="coerce").dropna()
+    if results.empty:
+        return calculate_metrics(pd.DataFrame(), starting_balance, risk_pct)
     wins, losses = results[results > 0], results[results < 0]
     cumulative = results.cumsum()
-    drawdown_r = cumulative.cummax() - cumulative
+    drawdown_r = cumulative.cummax().clip(lower=0) - cumulative
     streak = longest = 0
     for value in results:
         streak = streak + 1 if value < 0 else 0

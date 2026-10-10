@@ -99,7 +99,7 @@ def scan_context(
         model = model_class(**kwargs)
         for setup in model.scan(context):
             size = calculate_position_size(context.balance, float(settings.section("risk").get("risk_per_trade_pct", 0.75)), setup.entry, setup.stop, context.specs)
-            sized = replace(setup, lot_size=size.lots, risk_amount=size.risk_amount)
+            sized = replace(setup, lot_size=size.lots, risk_amount=size.actual_risk)
             result = apply_filters(
                 sized,
                 sessions=context.sessions,
@@ -107,8 +107,8 @@ def scan_context(
                 spread_points=spread_points,
                 max_spread_points=symbol_config.max_spread_points,
                 guard_allowed=guard_allowed,
-                active_symbol=active_symbol,
-                daily_count=daily_count,
+                active_symbol=active_symbol or bool(accepted),
+                daily_count=daily_count + len(accepted),
                 max_daily_count=int(settings.section("risk").get("max_setups_per_day", 3)),
                 news_window_minutes=int(settings.section("news_blackout").get("window_minutes", 30)),
                 news_events=[_utc_datetime(value) for value in settings.section("news_blackout").get("events", [])],

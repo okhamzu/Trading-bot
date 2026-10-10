@@ -15,6 +15,9 @@ class Outcome:
 
 
 def update_outcome(setup: Setup, bar: pd.Series) -> Outcome | None:
+    was_pending = setup.status == "pending"
+    if bar.close_time <= setup.created_at:
+        return None
     if setup.status == "pending":
         if bar.close_time > setup.expires_at:
             setup.status = "expired"
@@ -27,8 +30,8 @@ def update_outcome(setup: Setup, bar: pd.Series) -> Outcome | None:
             return Outcome("invalidated", 0.0, float(bar.close))
         if touched:
             setup.status = "triggered"
-            return Outcome("triggered", None, setup.entry)
-        return None
+        else:
+            return None
     if setup.status != "triggered":
         return None
     stop_hit = float(bar.low) <= setup.stop if setup.direction == "long" else float(bar.high) >= setup.stop
@@ -39,4 +42,6 @@ def update_outcome(setup: Setup, bar: pd.Series) -> Outcome | None:
     if tp_hit:
         setup.status = "tp1"
         return Outcome("tp1", setup.r_to_target(setup.targets[0]), setup.targets[0])
+    if was_pending and setup.status == "triggered":
+        return Outcome("triggered", None, setup.entry)
     return None

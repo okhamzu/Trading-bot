@@ -37,6 +37,9 @@ def main() -> None:
     client.connect()
     symbols = args.symbols or [item.name for item in settings.enabled_symbols]
     start, end = pd.Timestamp(args.start, tz="UTC"), pd.Timestamp(args.end, tz="UTC")
+    if start >= end:
+        client.shutdown()
+        raise ValueError("History start must be before end")
     specs = {}
     try:
         for symbol in symbols:

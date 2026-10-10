@@ -59,3 +59,13 @@ Each run writes `summary.csv`, `trades.csv`, and `report.md` under a timestamped
 ## Disclaimer
 
 This software is a research and alerting tool, not financial advice. Validate every model with out-of-sample testing and demo forward testing before risking real money.
+
+## Development and verification
+
+Codex can edit this repository without Claude Code. Codespaces setup installs the bot dependencies and runs the tests. Activate `.venv/bin/activate` for terminal work. Live MT5 still requires Windows.
+
+Run `python -m pytest -q -W error` to verify the data feeds, strategy components, risk sizing, fill costs, dry-run behavior and state storage. GitHub Actions runs these tests on Linux and Windows with Python 3.11 and 3.12.
+
+The portable cache is `data/history/`: `{symbol}_{timeframe}.parquet` (CSV fallback) and `symbol_specs.json`. Candle times are UTC opening times; feeds compute close times and exclude candles that have not closed.
+
+Dry-run mode logs WhatsApp messages locally. External delivery and MT5 connectivity need separate integration testing. The tests do not establish profitability or guarantee the absence of every defect.

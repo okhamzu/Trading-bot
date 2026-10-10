@@ -30,6 +30,10 @@ def update_trade(
 ) -> SimulatedTrade:
     setup = trade.setup
     timestamp = bar["close_time"]
+    if timestamp <= setup.created_at:
+        return trade
+    if same_bar_rule not in {"sl_first", "tp_first"}:
+        raise ValueError("Unknown same-bar fill rule")
     if trade.status == "pending":
         if timestamp > setup.expires_at:
             trade.status, trade.close_time, trade.result_r = "expired", timestamp, 0.0
@@ -52,13 +56,20 @@ def update_trade(
     stop_hit = float(bar.low) <= setup.stop if setup.direction == "long" else float(bar.high) >= setup.stop
     target = setup.targets[0]
     tp_hit = float(bar.high) >= target if setup.direction == "long" else float(bar.low) <= target
-    if stop_hit and tp_hit and same_bar_rule == "sl_first":
-        tp_hit = False
+    if stop_hit and tp_hit:
+        if same_bar_rule == "sl_first":
+            tp_hit = False
+        else:
+            stop_hit = False
     if stop_hit:
         slip = slippage_points * point
         trade.status, trade.close_time, trade.result_r = "sl", timestamp, -1.0
-        trade.exit_price = setup.stop - slip if setup.direction == "long" else setup.stop + slip
+        trade.exit_price = setup.stop - slip if setup.direction == "long" else setup.stop + slip + spread_points * point
     elif tp_hit:
         trade.status, trade.close_time, trade.result_r = "tp1", timestamp, setup.r_to_target(target)
-        trade.exit_price = target
+        trade.exit_price = target if setup.direction == "long" else target + spread_points * point
+    if trade.status in {"sl", "tp1"}:
+        sign = 1 if setup.direction == "long" else -1
+        trade.result_r = sign * (trade.exit_price - trade.fill_price) / abs(setup.entry - setup.stop)
     return trade
+

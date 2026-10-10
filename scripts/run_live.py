@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from datetime import date
 import logging
 import sys
 import time
@@ -57,9 +59,20 @@ def main() -> None:
     if args.reset_halt:
         guards.reset_halt()
         store.set_value("risk_halted", "false")
-    seen_deals: set[int] = set()
+    saved_risk = json.loads(store.get_value("risk_snapshot", "{}"))
+    if saved_risk:
+        guards.starting_balance = float(saved_risk["starting_balance"])
+        guards.peak_equity = float(saved_risk["peak_equity"])
+        guards.consecutive_losses = int(saved_risk["consecutive_losses"])
+        guards.daily_pnl = {date.fromisoformat(day): float(pnl) for day, pnl in saved_risk["daily_pnl"].items()}
+    if args.reset_halt:
+        guards.reset_halt()
+    saved_deals = store.get_value("seen_deals")
+    seen_deals = set(json.loads(saved_deals)) if saved_deals is not None else {
+        int(deal["ticket"]) for deal in client.get_closed_deals(datetime.now(timezone.utc) - timedelta(days=7))
+    }
     has_real_results = False
-    daily_counts: dict = {}
+    daily_counts = {date.fromisoformat(day): int(count) for day, count in json.loads(store.get_value("daily_counts", "{}")).items()}
     day_stats: dict = {}
     current_trading_day = None
     provider.send_text("SYSTEM: ICT/SMC alert bot started in DRY_RUN mode. No orders can be placed.")
@@ -72,7 +85,7 @@ def main() -> None:
             for deal in client.get_closed_deals(datetime.now(timezone.utc) - timedelta(days=7)):
                 ticket = int(deal.get("ticket", 0))
                 pnl = float(deal.get("profit", 0)) + float(deal.get("commission", 0)) + float(deal.get("swap", 0))
-                if not ticket or ticket in seen_deals or pnl == 0:
+                if not ticket or ticket in seen_deals or deal.get("entry") not in {1, 2, 3}:
                     continue
                 seen_deals.add(ticket)
                 has_real_results = True
@@ -83,7 +96,6 @@ def main() -> None:
                 execution = feed.get(symbol, timeframes["execution"], int(history.get(timeframes["execution"], 1500)))
                 if execution.empty or (not args.once and last_close.get(symbol) == execution.iloc[-1].close_time):
                     continue
-                last_close[symbol] = execution.iloc[-1].close_time
                 bias_frame = feed.get(symbol, timeframes["bias"], int(history.get(timeframes["bias"], 600)))
                 daily_frame = feed.get(symbol, "D1", int(history.get("D1", 500))) if settings.section("strategy").get("bias_method") == "daily_structure" else None
                 specs, account = client.get_symbol_specs(symbol), client.get_account()
@@ -110,15 +122,18 @@ def main() -> None:
                 for pool in context.pools:
                     watch_key = f"watch:{symbol}:{pool.side}:{pool.price}:{pool.resolved_at}"
                     if pool.status == "swept" and settings.section("alerts").get("send_watch_alerts", True) and not dedupe.already_sent(watch_key, "WATCH"):
-                        provider.send_text(format_watch(symbol, pool.side, pool.price))
-                        dedupe.mark_sent(watch_key, "WATCH")
+                        if provider.send_text(format_watch(symbol, pool.side, pool.price)):
+                            dedupe.mark_sent(watch_key, "WATCH")
                 for setup in setups:
                     if setup.created_at != execution.iloc[-1].close_time or dedupe.already_sent(setup.id):
                         continue
                     ai_text = commentary.generate(setup)
                     chart = render_chart(execution, setup, swings=context.swings, events=context.structure, fvgs=context.fvgs, pools=context.pools)
                     message = format_setup(setup, specs.digits, settings.section("alerts").get("display_timezone", "Asia/Karachi"), ai_text)
-                    provider.send_image(chart, message) if settings.section("alerts").get("attach_chart", True) else provider.send_text(message)
+                    delivered = provider.send_image(chart, message) if settings.section("alerts").get("attach_chart", True) else provider.send_text(message)
+                    if not delivered:
+                        LOGGER.error("Setup alert failed: %s", setup.id)
+                        continue
                     dedupe.mark_sent(setup.id)
                     store.save_setup(setup)
                     journal.append(setup, spread=spread, commentary=ai_text, chart_path=str(chart))
@@ -128,6 +143,8 @@ def main() -> None:
                     stats["setups"] += 1
                 current_bar = execution.iloc[-1]
                 for setup in list(active):
+                    if setup.symbol != symbol:
+                        continue
                     outcome = update_outcome(setup, current_bar)
                     if outcome:
                         provider.send_text(format_result(setup, outcome.status, outcome.result_r))
@@ -141,6 +158,14 @@ def main() -> None:
                                 pnl = setup.risk_amount * float(outcome.result_r or 0)
                                 guards.update(trading_day, pnl, float(account["equity"]) + pnl)
                             active.remove(setup)
+                store.set_value("daily_counts", json.dumps({day.isoformat(): count for day, count in daily_counts.items()}))
+                last_close[symbol] = execution.iloc[-1].close_time
+            store.set_value("seen_deals", json.dumps(sorted(seen_deals)))
+            store.set_value("risk_snapshot", json.dumps({
+                "starting_balance": guards.starting_balance, "peak_equity": guards.peak_equity,
+                "consecutive_losses": guards.consecutive_losses,
+                "daily_pnl": {day.isoformat(): pnl for day, pnl in guards.daily_pnl.items()},
+            }))
             if args.once:
                 break
             time.sleep(10)

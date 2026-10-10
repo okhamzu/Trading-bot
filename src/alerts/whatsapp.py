@@ -100,7 +100,7 @@ def _retry(operation, attempts: int = 3) -> bool:
 
 
 def build_provider(settings: Settings) -> WhatsAppProvider:
-    if not settings.section("mode").get("alerts_enabled", True):
+    if settings.dry_run or not settings.section("mode").get("alerts_enabled", True):
         return LoggingProvider()
     provider = settings.section("alerts").get("provider", "twilio")
     secret = settings.secrets
